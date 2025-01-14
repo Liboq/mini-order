@@ -1,0 +1,178 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["linux-musl-openssl-3.0.x", "debian-openssl-3.0.x", "windows"]
+}
+
+model User {
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  email               String               @unique
+  password            String
+  avatar              Upload?              @relation("UserAvatar", fields: [avatarId], references: [id])
+  avatarId            Int?                 @unique
+  address             String               @default("")
+  points              Int                  @default(2000)
+  balance             Float                @default(2000.0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  emailVerification   EmailVerification?
+  memberships         Membership[]
+  messages            Message[]
+  orders              Order[]
+  store               Store?               @relation("UserStore")
+  balanceTransactions BalanceTransaction[] // 新增关系
+  operationLogs       OperationLog[]
+}
+
+model BalanceTransaction {
+  id          Int             @id @default(autoincrement())
+  user        User            @relation(fields: [userId], references: [id])
+  userId      Int
+  amount      Float
+  type        TransactionType
+  description String?
+  createdAt   DateTime        @default(now())
+
+  @@index([userId, createdAt])
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+model Upload {
+  id        Int       @id @default(autoincrement())
+  filePath  String
+  httpUrl   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User?     @relation("UserAvatar")
+  menuItem  MenuItem? @relation("MenuItemImage")
+}
+
+model EmailVerification {
+  id               Int       @id @default(autoincrement())
+  user             User?     @relation(fields: [userId], references: [id])
+  userId           Int?      @unique
+  admin            Admin?    @relation(fields: [adminId], references: [id])
+  adminId          Int?      @unique
+  email            String    @unique
+  verificationCode String    @unique
+  expiresAt        DateTime
+  isVerified       Boolean   @default(false)
+  dailySendCount   Int       @default(0) // 每日发送次数
+  lastSentAt       DateTime? // 最后一次发送时间
+  createdAt        DateTime  @default(now())
+
+  @@map("mail")
+}
+
+model Store {
+  id          Int          @id @default(autoincrement())
+  name        String
+  description String?
+  user        User?        @relation("UserStore", fields: [userId], references: [id])
+  userId      Int?         @unique
+  menuItems   MenuItem[]
+  memberships Membership[]
+  orders      Order[]      @relation("StoreOrders") // 添加这行
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([name], name: "idx_store_name")
+}
+
+model MenuItem {
+  id         Int         @id @default(autoincrement())
+  name       String
+  category   String
+  desc       String
+  price      Float
+  emoji      String      @default("")
+  store      Store       @relation(fields: [storeId], references: [id])
+  storeId    Int
+  orderItems OrderItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  image      Upload?     @relation("MenuItemImage", fields: [imageId], references: [id])
+  imageId    Int?        @unique
+}
+
+model Order {
+  id         Int         @id @default(autoincrement())
+  user       User        @relation(fields: [userId], references: [id])
+  userId     Int
+  store      Store       @relation("StoreOrders", fields: [storeId], references: [id]) // 更新这行
+  storeId    Int
+  items      OrderItem[]
+  totalPrice Float
+  status     String
+  createdAt  DateTime    @default(now())
+}
+
+model OrderItem {
+  id         Int      @id @default(autoincrement())
+  order      Order    @relation(fields: [orderId], references: [id])
+  orderId    Int
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItemId Int
+  quantity   Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt // 添加默认
+}
+
+model Membership {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  store     Store    @relation(fields: [storeId], references: [id])
+  storeId   Int
+  status    String // pending, accepted, rejected
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  content   String
+  status    Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  createdAt DateTime @default(now())
+}
+
+model Admin {
+  id                Int                @id @default(autoincrement())
+  name              String
+  email             String             @unique
+  password          String
+  role              String             @default("ADMIN") // SUPER_ADMIN 或 ADMIN
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  emailVerification EmailVerification?
+  operationLogs     OperationLog[]
+}
+
+model OperationLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     
+  user        User?    @relation(fields: [userId], references: [id])
+  adminId     Int?     
+  admin       Admin?   @relation(fields: [adminId], references: [id])
+  action      String   
+  module      String   
+  description String   
+  ip          String   
+  area        String?  // 新增地理位置字段
+  userAgent   String   
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([adminId, createdAt])
+}

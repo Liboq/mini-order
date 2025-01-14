@@ -1,0 +1,21 @@
+FROM node:22-alpine as builder
+WORKDIR /mini_order_web
+
+COPY package.json  ./
+
+# 安装 pnpm
+RUN npm install -g pnpm
+RUN pnpm install
+
+COPY . .
+
+RUN pnpm run build
+
+FROM node:22-alpine as runner
+WORKDIR /mini_order_web
+
+COPY --from=builder /mini_order_web ./
+
+EXPOSE 8888
+
+CMD ["npx", "next", "start", "-p", "8888"]
